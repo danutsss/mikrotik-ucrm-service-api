@@ -1,0 +1,19 @@
+{
+    "version": "1",
+    "information": {
+        "name": "mikrotik-service-api",
+        "displayName": "MikroTik Service API",
+        "description": "This plugin will create automatically instances in Winbox using API after creating an UCRM client's service.",
+        "url": "https://github.com/matei1337/mikrotik-service-api",
+        "version": "1.0.0",
+        "ucrmVersionCompliancy": {
+            "min": "2.14.0",
+            "max": null
+        }, 
+        "unmsVersionCompliancy": {
+            "min": "1.0.0-alpha.1",
+            "max": null
+        },
+        "author": "Matei Nicolae - Daniel (07INTERNET)"
+    }
+}
