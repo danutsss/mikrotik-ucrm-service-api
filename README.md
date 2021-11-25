@@ -12,4 +12,4 @@ At the moment, if you want to use the plugin for your platform, you will need to
 
 ## Future updates
 
-* Configure the plugin, directly from the plugin's page.
+* Configure the plugin, directly from the plugin's configuration page.
