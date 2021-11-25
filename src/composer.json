@@ -2,6 +2,7 @@
     "name": "matei1337/mikrotik-ucrm-service-api",
     "description": "This plugin will create automatically instances in Winbox using API after creating an UCRM client's service.",
     "license": "MIT",
+    "minimum-stability": "stable",
     "autoload": {
         "psr-4": {
             "MikrotikService\\": [
@@ -28,8 +29,13 @@
         "evilfreelancer/routeros-api-php": "^1.4",
         "meklis/routeros-api": "^1.6",
 
-        "php-di/php-di": "^5.4",
+        "php-di/php-di": ">=6.0",
         "doctrine/cache": "^1.7",
         "katzgrau/klogger": "^1.2"
+    },
+    "config": {
+        "platform": {
+            "php": "7.3"
+        }
     }
 }
