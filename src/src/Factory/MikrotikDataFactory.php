@@ -14,6 +14,7 @@ namespace MikrotikService\Factory;
 use MikrotikService\Data\MikrotikData;
 use MikrotikService\Service\Logger;
 use MikrotikService\Service\UcrmApi;
+use MikrotikService\Service\RouterosAPI;
 
 class MikrotikDataFactory
 {
@@ -22,10 +23,17 @@ class MikrotikDataFactory
      */
     private $ucrmApi;
 
+    /**
+     * @var Logger
+     */
+    private $logger;
+
     public function __construct(
-        UcrmApi $ucrmApi
+        UcrmApi $ucrmApi,
+        Logger $logger
     ) {
         $this->ucrmApi = $ucrmApi;
+        $this->logger = $logger;
     }
 
     public function getObject($jsonData): MikrotikData {
