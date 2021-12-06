@@ -6,11 +6,13 @@ declare(strict_types=1);
 namespace MikrotikService;
 
 use Psr\Log\LogLevel;
+use MikrotikService\Service\UcrmApi;
 use MikrotikService\Factory\MikrotikDataFactory;
 use MikrotikService\Service\OptionsManager;
 use MikrotikService\Service\PluginDataValidator;
 use MikrotikService\Service\Logger;
 use MikrotikService\Service\RouterosAPI;
+use MikrotikService\Service\UCRMAPIAccess;
 
 class Plugin
 {
@@ -34,17 +36,24 @@ class Plugin
      */
     private $mikrotikDataFactory;
 
+    /**
+     * @var UCRMAPIAccess
+     */
+    private $ucrmApi;
+
     public function __construct(
         Logger $logger,
         OptionsManager $optionsManager,
         PluginDataValidator $pluginDataValidator,
-        MikrotikDataFactory $mikrotikDataFactory
+        MikrotikDataFactory $mikrotikDataFactory,
+        UCRMAPIAccess $ucrmApi
     )
     {
         $this->logger = $logger;
         $this->optionsManager = $optionsManager;
         $this->pluginDataValidator = $pluginDataValidator;
         $this->mikrotikDataFactory = $mikrotikDataFactory;
+        $this -> ucrmApi = $ucrmApi;
     }
 
     public function run(): void
@@ -54,7 +63,7 @@ class Plugin
             $this->processHttpRequest();
             $this->logger->info('HTTP request processing ended.');
         } elseif (PHP_SAPI === 'cli') {
-            $this->logger->info('TMikrotik Service API over CLI started');
+            $this->logger->info('Mikrotik Service API over CLI started');
             $this->processCli();
             $this->logger->info('CLI process ended.');
         } else {
@@ -91,7 +100,6 @@ class Plugin
             return;
         }
 
-
         $mikrotik = $this->mikrotikDataFactory->getObject($jsonData);
         if ($mikrotik->changeType === 'test') {
             $this->logger->info('Webhook test successful.');
@@ -109,35 +117,13 @@ class Plugin
             $mktApi -> debug = true;
 
             // IP RANGE 93.119.183.0 - 93.119.183.255
-
-            if(!$mktApi -> connect('mktIP', 'mktUser', 'mktPass')) {
-                $this -> logger -> warning('Could not connec tto RouterOS API.');
-            } else {
-                $mktApi -> write("/ppp/secret/getall", true);
-                $mktRead = $mktApi -> read(false);
-                $mktArray = $mktApi -> parseResponse($mktRead);
-
-                $mktApi -> write("/ppp/secret/print", true);
-                $mktRead = $mktApi -> read(false);
-                $mktArray = $mktApi -> parseResponse($mktRead);
-
-                foreach($mktArray as $mktAccounting) {
-                    $remoteAddr = $mktAccounting['remote-address'];
-
-                    // Check if IP already is set as remote-address.
-                    if($remoteAddr === $this -> mikrotikDataFactory -> getServiceData($mikrotik)['attributes'][0]['value']) {
-                        $this -> logger -> warning('An instance with this remote-address already exists.');
-                    } else {
-                        $mktApi -> comm("/ppp/secret/add", array(
-                            "name" => "07NAV" . $this -> mikrotikDataFactory -> getClientData($mikrotik)['id'],
-                            "password" => $this -> mikrotikDataFactory -> getClientData($mikrotik)['attributes'][1]['value'],
-                            "remote-address" => $this -> mikrotikDataFactory -> getServiceData($mikrotik)['attributes'][0]['value'],
-                            "comment" => $this -> mikrotikDataFactory -> getClientData($mikrotik)['fullAddress'],
-                            "service" => "pppoe",
-                        ));
-                    }
-                }
-            }
+            /**
+             * Daca un serviciu este creat si este setat un Remote Address deja existent pentru alt serviciu deja creat,
+             * serviciul sa nu poata fi creat sau sa se seteze automat un remote addres + 1.
+             * 
+             * Pentru moment, in cazul service.end / service.suspend, in Mikrotik sa se schimbe remote-address cu 1.1.1.1,
+             * eliberandu-se IP-ul setat la crearea serviciului.
+            */           
 
             $mktApi -> disconnect();
         } catch (\Exception $ex) {

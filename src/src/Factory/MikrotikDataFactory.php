@@ -57,6 +57,8 @@ class MikrotikDataFactory
             case 'service':
                 $mikrotikData->clientId = $this->getServiceData($mikrotikData)['clientId'] ?? null;
                 break;
+            case 'services':
+                $mikrotikData = $this -> ucrmApi -> query('clients/services');
         }
         if ($mikrotikData->clientId) {
             $this->getClientData($mikrotikData);
