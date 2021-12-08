@@ -6,13 +6,12 @@ declare(strict_types=1);
 namespace MikrotikService;
 
 use Psr\Log\LogLevel;
-use MikrotikService\Service\UcrmApi;
 use MikrotikService\Factory\MikrotikDataFactory;
 use MikrotikService\Service\OptionsManager;
 use MikrotikService\Service\PluginDataValidator;
 use MikrotikService\Service\Logger;
 use MikrotikService\Service\RouterosAPI;
-use MikrotikService\Service\UCRMAPIAccess;
+use Ubnt\UcrmPluginSdk\Service\UnmsApi;
 
 class Plugin
 {
@@ -36,24 +35,17 @@ class Plugin
      */
     private $mikrotikDataFactory;
 
-    /**
-     * @var UCRMAPIAccess
-     */
-    private $ucrmApi;
-
     public function __construct(
         Logger $logger,
         OptionsManager $optionsManager,
         PluginDataValidator $pluginDataValidator,
-        MikrotikDataFactory $mikrotikDataFactory,
-        UCRMAPIAccess $ucrmApi
+        MikrotikDataFactory $mikrotikDataFactory
     )
     {
         $this->logger = $logger;
         $this->optionsManager = $optionsManager;
         $this->pluginDataValidator = $pluginDataValidator;
         $this->mikrotikDataFactory = $mikrotikDataFactory;
-        $this -> ucrmApi = $ucrmApi;
     }
 
     public function run(): void
@@ -106,6 +98,8 @@ class Plugin
 
             return;
         }
+        
+
         if (! $mikrotik->clientId) {
             $this->logger->warning('No client specified, cannot notify them.');
 
@@ -113,19 +107,119 @@ class Plugin
         }
 
         try {
-            $mktApi = new RouterosAPI;
-            $mktApi -> debug = true;
-
             // IP RANGE 93.119.183.0 - 93.119.183.255
             /**
-             * Daca un serviciu este creat si este setat un Remote Address deja existent pentru alt serviciu deja creat,
-             * serviciul sa nu poata fi creat sau sa se seteze automat un remote addres + 1.
              * 
-             * Pentru moment, in cazul service.end / service.suspend, in Mikrotik sa se schimbe remote-address cu 1.1.1.1,
-             * eliberandu-se IP-ul setat la crearea serviciului.
-            */           
+             * 
+             * UNMS API Token: x-auth-token
+            */
 
-            $mktApi -> disconnect();
+            include 'Functions.php';
+
+            $rangeStart = '93.119.183.0';
+            $rangeEnd = '93.119.183.255';
+
+            $ipAddress = randomIPFromRange($rangeStart, $rangeEnd);
+            $fullName = $this -> mikrotikDataFactory -> getClientData($mikrotik)['lastName'] . ' ' . $this -> mikrotikDataFactory -> getClientData($mikrotik)['firstName'];
+            $clientId = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['userIdent']) ? $this -> mikrotikDataFactory -> getClientData($mikrotik)['userIdent'] : 'NOT_SET');
+            $deviceUser = "07NAV" . $clientId;
+            $devicePass = generateRandPassword();
+            $fullAddress = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['fullAddress']) ? $this -> mikrotikDataFactory -> getServiceData($mikrotik)['fullAddress'] : 'NOT_SET');
+
+            if($mikrotik -> changeType === 'insert') {
+                $this -> logger -> info("Webhook 'insert' successfull.");
+
+                $ch = curl_init();
+
+                curl_setopt($ch, CURLOPT_URL, "X");
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+                curl_setopt($ch, CURLOPT_HEADER, FALSE);
+
+                curl_setopt($ch, CURLOPT_POST, TRUE);
+
+                curl_setopt($ch, CURLOPT_POSTFIELDS, "
+                    [
+                        {
+                            \"ip\": \"$ipAddress\",
+                            \"ubntDevice\": true,
+                            \"deviceRole\": \"router\",
+                            \"username\": \"$deviceUser\",
+                            \"password\": \"$devicePass\",
+                            \"httpsPort\": 449,
+                            \"sshPort\": 22,
+                            \"hostname\": \"$deviceUser\",
+                            \"model\": \"Unknwon\",
+                            \"interfaces\": [
+                                {
+                                    \"index\": 0,
+                                    \"name\": \"$deviceUser\",
+                                    \"type\": \"eth\",
+                                    \"addresses\": [
+                                        \"$ipAddress/32\"
+                                    ] 
+                                }
+                            ],
+                            \"note\": \"$fullAddress\"
+                        }
+                    ]
+                ");
+
+                curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+                "Accept: application/json",
+                "x-auth-token: x-auth-token",
+                "Content-Type: application/json"
+                ));
+
+                $response = curl_exec($ch);
+                curl_close($ch);
+
+                if($response) {
+                    $mktApi = new RouterosAPI;
+                    $mktApi -> debug = true;
+
+                    if($mktApi -> connect("mktIp", "mktUser", "mktPass")) {
+                        $mktApi -> comm("/ppp/secret/add", array(
+                            "name" => $deviceUser,
+                            "remote-address" => $ipAddress,
+                            "password" => $devicePass,
+                            "service" => "pppoe",
+                            "comment" => $fullAddress
+                        ));
+
+                        $this -> logger -> info("Instance has been created into Winbox with user: " . $deviceUser . " and password: " . $devicePass);
+                    }
+
+                    $this -> logger -> info("Device was created successfully in NMS for: " . $fullName);
+                } else {
+                    $this -> logger -> error($response);
+                }
+
+                $mktApi -> disconnect();
+                return;
+            } 
+
+            if($mikrotik->changeType === 'end') {
+
+                $this -> logger -> info("webhook end successfull.");
+                
+                $mktApi = new RouterosAPI;
+                $mktApi -> debug = true;
+
+                if($mktApi -> connect("mktIp", "mktUser", "mktPass")) {
+                    $allUsers = $mktApi -> comm("/ppp/secret/getall", array(
+                        ".proplist" => ".id",
+                        "?name" => $deviceUser,
+                    ));
+
+                    $mktApi -> comm("/ppp/secret/remove", array(
+                        ".id" => $allUsers[0][".id"]
+                    ));
+
+                    $this -> logger -> info("Instance deleted for user: " . $deviceUser);
+                }
+                
+                return;
+            }
         } catch (\Exception $ex) {
             $this->logger->error($ex->getMessage());
             $this->logger->warning($ex->getTraceAsString());

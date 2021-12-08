@@ -1,5 +1,7 @@
 <?php
 
+use Ubnt\UcrmPluginSdk\Service\UcrmOptionsManager;
+
 chdir(__DIR__);
 
 require 'vendor/autoload.php';

@@ -1,15 +1,13 @@
 # MikroTik & UCRM Service API
 
-## How it works?
+## Cum functioneaza? / How it works?
 
-This plugin handles the creation of PPP instances into Winbox. These instances are created automatically after a service is created for an UCRM client.
+RO:
+Acest plugin a fost dezvoltat cu scopul de a crea automat device-uri pe platforma UISP (NMS), instante PPP in Winbox, dupa crearea unui serviciu de client.
 
-The instance is completed with client's information that I get through UCRM API.
+Informatiile care completeaza campurile din "/ppp/secret" sunt luat direct din platforma folosind API-ul UCRM, exemplu: adresa serviciului, numele complet al clientului etc.
 
-## Configuration
+EN:
+This plugin will automatically create UISP (NMS) devices and PPP Instances in Winbox after a service is created for a client.
 
-At the moment, if you want to use the plugin for your platform, you will need to configure the connection to Winbox manually from `src/src/Plugin.php`.
-
-## Future updates
-
-* Configure the plugin, directly from the plugin's configuration page.
+The information that will fill the fields in "/ppp/secret" are taken from the platform using UCRM's API, such as: service address, client's full name, client's custom ID etc.
