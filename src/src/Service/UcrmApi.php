@@ -26,6 +26,9 @@ class UcrmApi
      */
     private $verifyUcrmApiConnection;
 
+    const API_URL = 'https://uisp.07internet.ro/nms/api/v2.1';
+    const APP_KEY = '415711e5-29f7-4a20-9ca2-cf7451ef214f';
+
     public function __construct(CurlExecutor $curlExecutor, OptionsManager $optionsManager)
     {
         $this->curlExecutor = $curlExecutor;
@@ -77,6 +80,61 @@ class UcrmApi
             $parameters,
             $this->verifyUcrmApiConnection
         );
+    }
+
+    public static function doRequest($url, $method = 'GET', $post = [])
+    {
+        $method = strtoupper($method);
+
+        $ch = curl_init();
+
+        curl_setopt(
+            $ch,
+            CURLOPT_URL,
+            sprintf(
+                '%s/%s',
+                self::API_URL,
+                $url
+            )
+        );
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HEADER, false);
+
+        curl_setopt(
+            $ch,
+            CURLOPT_HTTPHEADER,
+            [
+                'Content-Type: application/json',
+                sprintf('x-auth-token: %s', self::APP_KEY),
+                'accept: application/json'
+            ]
+        );
+
+        if ($method === 'POST') {
+            curl_setopt($ch, CURLOPT_POST, true);
+        } elseif ($method !== 'GET') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+        }
+
+        if (! empty($post)) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post));
+        }
+
+        $response = curl_exec($ch);
+
+        if (curl_errno($ch) !== 0) {
+            echo sprintf('Curl error: %s', curl_error($ch)) . PHP_EOL;
+        }
+
+        if (curl_getinfo($ch, CURLINFO_HTTP_CODE) >= 400) {
+            echo sprintf('API error: %s', $response) . PHP_EOL;
+            $response = false;
+        }
+
+        curl_close($ch);
+
+        return $response !== false ? json_decode($response, true) : null;
     }
 
     private function getApiUrl(PluginData $optionsData): string

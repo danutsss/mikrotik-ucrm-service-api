@@ -31,13 +31,8 @@ class PluginDataValidator
     {
         $pluginData = $this->optionsManager->load();
         $valid = true;
-        if (empty($pluginData->mktUser)) {
-            $this->errors[] = 'Not valid configuration: MikroTik User must be configured';
-            $valid = false;
-        }
-
-        if (empty($pluginData->mktPass)) {
-            $this->errors[] = 'Not valid configuration: MikroTik Password must be configured';
+        if (empty($pluginData->ipAddresses)) {
+            $this->errors[] = 'Not valid configuration: IP Addresses must be configured';
             $valid = false;
         }
 

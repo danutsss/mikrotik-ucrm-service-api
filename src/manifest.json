@@ -15,5 +15,25 @@
             "max": null
         },
         "author": "Matei Nicolae - Daniel (07INTERNET)"
-    }
+    },
+    "configuration": [
+        {
+            "key": "ipAddresses",
+            "label": "IP Addreses",
+            "description": "Adrese IP pentru device-uri, separate de virgula.",
+            "required": 1,
+            "type": "textarea"
+        }
+    ],
+    "menu": [
+        {
+            "key": "Adrese IP",
+            "label": "Vizualizare adrese IP",
+            "type": "admin",
+            "target": "iframe",
+            "parameters": {
+                "hook": "seeips"
+            }
+        }
+    ]
 }

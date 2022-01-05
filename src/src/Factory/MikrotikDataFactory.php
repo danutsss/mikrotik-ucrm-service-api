@@ -13,7 +13,6 @@ namespace MikrotikService\Factory;
 
 use MikrotikService\Data\MikrotikData;
 use MikrotikService\Service\UcrmApi;
-use MikrotikService\Service\RouterosAPI;
 
 class MikrotikDataFactory
 {
@@ -61,7 +60,7 @@ class MikrotikDataFactory
         }
         return $mikrotikData->clientData;
     }
-
+    
     public function getServiceData(MikrotikData $mikrotikData) {
         if (empty($mikrotikData->serviceData) && $mikrotikData->entityId) {
             $mikrotikData->serviceData = $this->ucrmApi->query('clients/services/' . $mikrotikData->entityId);

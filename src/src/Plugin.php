@@ -11,7 +11,7 @@ use MikrotikService\Service\OptionsManager;
 use MikrotikService\Service\PluginDataValidator;
 use MikrotikService\Service\Logger;
 use MikrotikService\Service\RouterosAPI;
-use Ubnt\UcrmPluginSdk\Service\UnmsApi;
+use MikrotikService\Service\UcrmApi;
 
 class Plugin
 {
@@ -34,7 +34,7 @@ class Plugin
      * @var MikrotikDataFactory
      */
     private $mikrotikDataFactory;
-
+    
     public function __construct(
         Logger $logger,
         OptionsManager $optionsManager,
@@ -73,6 +73,8 @@ class Plugin
 
     private function processHttpRequest(): void
     {
+        include 'Functions.php';
+
         $pluginData = $this->optionsManager->load();
         if ($pluginData->logging_level) {
             $this->logger->setLogLevelThreshold(LogLevel::DEBUG);
@@ -107,115 +109,174 @@ class Plugin
         }
 
         try {
-            // IP RANGE 93.119.183.0 - 93.119.183.255
             /**
-             * 
-             * 
-             * UNMS API Token: x-auth-token
+             * UNMS API Token: 415711e5-29f7-4a20-9ca2-cf7451ef214f
             */
 
-            include 'Functions.php';
+            $IPs = cidrToRange($pluginData -> ipAddresses);
+            $ipAddress = array_rand($IPs, 1);
 
-            $rangeStart = '93.119.183.0';
-            $rangeEnd = '93.119.183.255';
-
-            $ipAddress = randomIPFromRange($rangeStart, $rangeEnd);
-            $fullName = $this -> mikrotikDataFactory -> getClientData($mikrotik)['lastName'] . ' ' . $this -> mikrotikDataFactory -> getClientData($mikrotik)['firstName'];
-            $clientId = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['userIdent']) ? $this -> mikrotikDataFactory -> getClientData($mikrotik)['userIdent'] : 'NOT_SET');
-            $deviceUser = "07NAV" . $clientId;
+            $deviceId = randomGUID();
+            $lastName = $this -> mikrotikDataFactory -> getClientData($mikrotik)['lastName'];
+            $firstName = $this -> mikrotikDataFactory -> getClientData($mikrotik)['firstName'];
+            $fullName = $lastName . ' ' . $firstName;
+            $clientId = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['id']) ? $this -> mikrotikDataFactory -> getClientData($mikrotik)['id'] : 'NOT_SET');
+            $clientIdent = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['userIdent']) ? $this -> mikrotikDataFactory -> getClientData($mikrotik)['userIdent'] : 'NOT_SET');
+            $deviceUser = "07NAV" . $clientIdent;
             $devicePass = generateRandPassword();
             $fullAddress = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['fullAddress']) ? $this -> mikrotikDataFactory -> getServiceData($mikrotik)['fullAddress'] : 'NOT_SET');
+            $clientSiteId = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['unmsClientSiteId']) ? $this -> mikrotikDataFactory -> getServiceData($mikrotik)['unmsClientSiteId'] : 'NOT_SET');
 
-            if($mikrotik -> changeType === 'insert') {
-                $this -> logger -> info("Webhook 'insert' successfull.");
+            if($mikrotik -> changeType === 'insert' || $mikrotik -> changeType === 'unsuspend') {
+                if($this -> mikrotikDataFactory -> getServiceData($mikrotik)['servicePlanType'] === 'Internet') {
+                    $internetPlan = curl_init();
 
-                $ch = curl_init();
+                    curl_setopt($internetPlan, CURLOPT_URL, "https://uisp.07internet.ro/nms/api/v2.1/devices/blackboxes/config");
+                    curl_setopt($internetPlan, CURLOPT_RETURNTRANSFER, TRUE);
+                    curl_setopt($internetPlan, CURLOPT_HEADER, FALSE);
 
-                curl_setopt($ch, CURLOPT_URL, "X");
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
-                curl_setopt($ch, CURLOPT_HEADER, FALSE);
+                    curl_setopt($internetPlan, CURLOPT_POST, TRUE);
 
-                curl_setopt($ch, CURLOPT_POST, TRUE);
-
-                curl_setopt($ch, CURLOPT_POSTFIELDS, "
-                    [
+                    curl_setopt($internetPlan, CURLOPT_POSTFIELDS, "
                         {
-                            \"ip\": \"$ipAddress\",
-                            \"ubntDevice\": true,
+                            \"deviceId\": \"$deviceId\",
+                            \"hostname\": \"$IPs[$ipAddress]\",
+                            \"modelName\": \"Router\",
+                            \"macAddress\": \"00:00:0a:00:00:aa\",
                             \"deviceRole\": \"router\",
-                            \"username\": \"$deviceUser\",
-                            \"password\": \"$devicePass\",
-                            \"httpsPort\": 449,
-                            \"sshPort\": 22,
-                            \"hostname\": \"$deviceUser\",
-                            \"model\": \"Unknwon\",
+                            \"siteId\": \"$clientSiteId\",
+                            \"pingEnabled\": true,
+                            \"ipAddress\": \"$IPs[$ipAddress]\",
+                            \"ubntDevice\": false,
+                            \"note\": \"$fullAddress\",
                             \"interfaces\": [
                                 {
-                                    \"index\": 0,
+                                    \"id\": \"$deviceUser\",
+                                    \"position\": 0,
                                     \"name\": \"$deviceUser\",
+                                    \"mac\": \"00:00:0a:00:00:aa\",
                                     \"type\": \"eth\",
                                     \"addresses\": [
-                                        \"$ipAddress/32\"
-                                    ] 
+                                        \"$IPs[$ipAddress]/32\"
+                                    ]
                                 }
-                            ],
-                            \"note\": \"$fullAddress\"
+                            ]
                         }
-                    ]
-                ");
+                    ");
 
-                curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-                "Accept: application/json",
-                "x-auth-token: x-auth-token",
-                "Content-Type: application/json"
-                ));
+                    curl_setopt($internetPlan, CURLOPT_HTTPHEADER, array(
+                    "Accept: application/json",
+                    "x-auth-token: 415711e5-29f7-4a20-9ca2-cf7451ef214f",
+                    "Content-Type: application/json"
+                    ));
 
-                $response = curl_exec($ch);
-                curl_close($ch);
+                    $internetPlanResponse = curl_exec($internetPlan);
+                    curl_close($internetPlan);
 
-                if($response) {
+                    if($internetPlanResponse) {
+                        $mktApi = new RouterosAPI;
+                        $mktApi -> debug = true;
+
+                        if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
+
+                            $sameNames = $mktApi -> comm("/ppp/secret/getall", array(
+                                ".proplist" => ".id",
+                                "?name" => $deviceUser
+                            ));
+
+                            static $i = 0;
+                            if($sameNames) {
+                                $i ++;
+                                $mktApi -> comm("/ppp/secret/add", array(
+                                    "name" => $deviceUser . " ($i)",
+                                    "remote-address" => $IPs[$ipAddress],
+                                    "password" => $devicePass,
+                                    "service" => "pppoe",
+                                    "comment" => $fullAddress
+                                ));
+                            } else {
+                                $mktApi -> comm("/ppp/secret/add", array(
+                                    "name" => $deviceUser,
+                                    "remote-address" => $IPs[$ipAddress],
+                                    "password" => $devicePass,
+                                    "service" => "pppoe",
+                                    "comment" => $fullAddress
+                                ));
+                            }
+                        }
+
+                        // Update Custom Attribute for device password.
+                        $customAttr = curl_init();
+
+                        curl_setopt($customAttr, CURLOPT_URL, 'https://uisp.07internet.ro/crm/api/v1.0/clients/' . $clientId);
+                        curl_setopt($customAttr, CURLOPT_RETURNTRANSFER, TRUE);
+                        curl_setopt($customAttr, CURLOPT_HEADER, FALSE);
+
+                        curl_setopt($customAttr, CURLOPT_CUSTOMREQUEST, 'PATCH');
+
+                        curl_setopt($customAttr, CURLOPT_POSTFIELDS, "{
+                            \"attributes\": [
+                                {
+                                    \"value\": \"$devicePass\",
+                                    \"customAttributeId\": 19
+                                }
+                            ]
+                        }");
+
+                        curl_setopt($customAttr, CURLOPT_HTTPHEADER, array(
+                            'Content-Type: application/json',
+                            'X-Auth-App-Key: HS9hdWcdsV34MXGy/VKKloywDwZeVORNGAfZlHQNQM2sAQM03bSPOodm/9eQ1qpH'
+                        ));
+
+                        $dump = curl_exec($customAttr);
+                        curl_close($customAttr);
+                    }
+
+                    $mktApi -> disconnect();
+                    return;
+                } elseif($this -> mikrotikDataFactory -> getServiceData($mikrotik)['servicePlanType'] === 'General') {
                     $mktApi = new RouterosAPI;
                     $mktApi -> debug = true;
 
-                    if($mktApi -> connect("mktIp", "mktUser", "mktPass")) {
+                    if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
                         $mktApi -> comm("/ppp/secret/add", array(
                             "name" => $deviceUser,
-                            "remote-address" => $ipAddress,
+                            "remote-address" => "1.1.1.1",
                             "password" => $devicePass,
                             "service" => "pppoe",
                             "comment" => $fullAddress
                         ));
-
-                        $this -> logger -> info("Instance has been created into Winbox with user: " . $deviceUser . " and password: " . $devicePass);
                     }
 
-                    $this -> logger -> info("Device was created successfully in NMS for: " . $fullName);
-                } else {
-                    $this -> logger -> error($response);
+                    $mktApi -> disconnect();
+                    return;
                 }
+            }
 
-                $mktApi -> disconnect();
-                return;
-            } 
-
-            if($mikrotik->changeType === 'end') {
-
-                $this -> logger -> info("webhook end successfull.");
-                
+            if($mikrotik->changeType === 'end' || $mikrotik -> changeType === 'suspend') {
                 $mktApi = new RouterosAPI;
                 $mktApi -> debug = true;
 
-                if($mktApi -> connect("mktIp", "mktUser", "mktPass")) {
+                if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
                     $allUsers = $mktApi -> comm("/ppp/secret/getall", array(
                         ".proplist" => ".id",
-                        "?name" => $deviceUser,
+                        "?comment" => $fullAddress,
+                    ));
+
+                    $mktApi -> comm("/ppp/secret/set", array(
+                        ".id" => $allUsers[0][".id"],
+                        "?remote-address" => "1.1.1.1"
                     ));
 
                     $mktApi -> comm("/ppp/secret/remove", array(
                         ".id" => $allUsers[0][".id"]
                     ));
 
-                    $this -> logger -> info("Instance deleted for user: " . $deviceUser);
+                    $mktApi -> comm("/ppp/active/remove", array(
+                        ".id" => $allUsers[0][".id"]
+                    ));
+
+                    $this -> logger -> info("Instance deleted for user: $deviceUser.");
                 }
                 
                 return;
