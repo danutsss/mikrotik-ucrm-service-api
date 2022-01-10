@@ -121,7 +121,12 @@ class Plugin
             $clientIdent = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['userIdent']) ? $this -> mikrotikDataFactory -> getClientData($mikrotik)['userIdent'] : 'NOT_SET');
             $deviceName = "07NAV" . $clientIdent;
             $devicePass = generateRandPassword();
-            $fullAddress = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['fullAddress']) ? $this -> mikrotikDataFactory -> getServiceData($mikrotik)['fullAddress'] : 'NOT_SET');
+            $firstName = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['firstName']) ? $this -> mikrotikDataFactory -> getClientData($mikrotik)['firstName'] : 'NOT_SET');
+            $lastName = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['lastName']) ? $this -> mikrotikDataFactory -> getClientData($mikrotik)['lastName'] : 'NOT_SET');
+            $fullName = $lastName . ' ' . $firstName;
+            $street1 = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['street1']) ? $this -> mikrotikDataFactory -> getServiceData($mikrotik)['street1'] : 'NOT_SET');
+            $street2 = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['street2']) ? $this -> mikrotikDataFactory -> getServiceData($mikrotik)['street2'] : 'NOT_SET');
+            $fullAddress = $street1 . ' ' . $street2;
             $clientSiteId = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['unmsClientSiteId']) ? $this -> mikrotikDataFactory -> getServiceData($mikrotik)['unmsClientSiteId'] : 'NOT_SET');
 
             if($mikrotik -> changeType === 'insert' || $mikrotik -> changeType === 'unsuspend') {
@@ -205,7 +210,7 @@ class Plugin
                                 "remote-address" => $IPs[$ipAddress],
                                 "password" => $devicePass,
                                 "service" => "pppoe",
-                                "comment" => $fullAddress
+                                "comment" => $fullName . ' / ' . $fullAddress
                             ));
 
                             $mktApi -> disconnect();
@@ -244,12 +249,36 @@ class Plugin
                     $mktApi -> debug = true;
 
                     if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
+
+                        $i = 0;
+                        $deviceUser = $deviceUserOriginal = "07NAV" . $clientIdent;
+                        do {
+                            // First - check if a duplicate exists...
+                            $sameNames = $mktApi -> comm("/ppp/secret/getall", array(
+                                ".proplist" => ".id",
+                                "?name" => $deviceUser
+                            ));
+
+                            // Second - update and prepare for rechecking...
+                            if($sameNames) {
+                                $i ++;
+                                $deviceUser = $deviceUserOriginal . " (". $i .")";
+                            }
+
+                            // Finally, below, if check failed, cycle and check again with the new updated name...
+                        }
+                        while($sameNames);
+
+                        // Finally, tidy up...
+                        // If you need the original value of "Device User" you can retain it.
+                        unset($i, $deviceUserOriginal);
+
                         $mktApi -> comm("/ppp/secret/add", array(
                             "name" => $deviceUser,
                             "remote-address" => "1.1.1.1",
                             "password" => $devicePass,
                             "service" => "pppoe",
-                            "comment" => $fullAddress
+                            "comment" => $fullName . ' / ' . $fullAddress
                         ));
                     }
 
@@ -258,32 +287,56 @@ class Plugin
                 }
             }
 
-            if($mikrotik->changeType === 'end' || $mikrotik -> changeType === 'suspend') {
+            /**
+             * SUSPEND - remove de la active si modifica remote-address la 1.1.1.1.
+             * END - remove din active si din secret.
+             * 
+             * 1. Solutie pentru SMS Sending.
+             * 2. Retrimitere mail-uri in functie de nume, DOB.
+             */
+
+            if($mikrotik -> changeType === 'suspend') {
                 $mktApi = new RouterosAPI;
                 $mktApi -> debug = true;
 
                 if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
                     $allUsers = $mktApi -> comm("/ppp/secret/getall", array(
                         ".proplist" => ".id",
-                        "?comment" => $fullAddress,
+                        "?comment" => $fullName . ' / ' . $fullAddress
                     ));
 
                     $mktApi -> comm("/ppp/secret/set", array(
                         ".id" => $allUsers[0][".id"],
-                        "?remote-address" => "1.1.1.1"
+                        "?remote-address" => "1.1.1.1",
                     ));
 
-                    $mktApi -> comm("/ppp/secret/remove", array(
+                    /*$mktApi -> comm("/ppp/active/remove", array(
                         ".id" => $allUsers[0][".id"]
+                    ));*/
+                }
+                $mktApi -> disconnect();   
+                return;
+            }
+
+            if($mikrotik -> changeType === 'end') {
+                $mktApi = new RouterosAPI;
+                $mktApi -> debug = true;
+
+                if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
+                    $allUsers = $mktApi -> comm("/ppp/secret/getall", array(
+                        ".proplist" => ".id",
+                        "?comment" => $fullName . ' / ' . $fullAddress
                     ));
 
                     $mktApi -> comm("/ppp/active/remove", array(
                         ".id" => $allUsers[0][".id"]
                     ));
 
-                    $this -> logger -> info("Instance deleted for user: $deviceUser.");
+                    $mktApi -> comm("/ppp/secret/remove", array(
+                        ".id" => $allUsers[0][".id"]
+                    ));
                 }
-                
+                $mktApi -> disconnect();
                 return;
             }
         } catch (\Exception $ex) {
