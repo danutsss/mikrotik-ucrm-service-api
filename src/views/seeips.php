@@ -12,10 +12,6 @@ use Ubnt\UcrmPluginSdk\Service\UcrmSecurity;
 $security = UcrmSecurity::create();
 $user = $security -> getUser();
 
-if($user -> isClient) {
-    \MikrotikService\Service\Http::forbidden();
-}
-
 $optionsManager = new OptionsManager();
 $pluginData = $optionsManager -> load();
 
