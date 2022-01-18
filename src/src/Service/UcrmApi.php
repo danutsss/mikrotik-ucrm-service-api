@@ -29,6 +29,9 @@ class UcrmApi
     const API_URL = 'https://uisp.07internet.ro/nms/api/v2.1';
     const APP_KEY = '415711e5-29f7-4a20-9ca2-cf7451ef214f';
 
+    const UCRM_URL = 'https://uisp.07internet.ro/crm/api/v1.0';
+    const UCRM_KEY = 'HS9hdWcdsV34MXGy/VKKloywDwZeVORNGAfZlHQNQM2sAQM03bSPOodm/9eQ1qpH';
+
     public function __construct(CurlExecutor $curlExecutor, OptionsManager $optionsManager)
     {
         $this->curlExecutor = $curlExecutor;
@@ -134,6 +137,49 @@ class UcrmApi
 
         curl_close($ch);
 
+        return $response !== false ? json_decode($response, true) : null;
+    }
+
+    public static function ucrmRequest($url, $method = 'GET', $post = []) {
+        $method = strtoupper($method);
+
+        $ch = curl_init();
+
+        curl_setopt(
+            $ch,
+            CURLOPT_URL,
+            sprintf('%s/%s', self::UCRM_URL, $url)
+        );
+
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HEADER, false);
+
+        curl_setopt(
+            $ch,
+            CURLOPT_HTTPHEADER,
+            [
+                'Content-Type: application/json',
+                sprintf('X-Auth-App-Key: %s', self::UCRM_KEY),
+            ]
+        );
+
+        if($method !== 'GET') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+        }
+
+        $response = curl_exec($ch);
+
+        if(curl_errno($ch) !== 0) {
+            echo sprintf('Eroare cURL: %s', curl_error($ch)) . PHP_EOL;
+        }
+
+        if(curl_getinfo($ch, CURLINFO_HTTP_CODE) >= 400) {
+            echo sprintf('Eroare API: %s', $response) . PHP_EOL;
+            $response = false;
+        }
+
+        curl_close($ch);
         return $response !== false ? json_decode($response, true) : null;
     }
 

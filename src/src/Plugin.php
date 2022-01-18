@@ -121,224 +121,421 @@ class Plugin
             $clientIdent = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['userIdent']) ? $this -> mikrotikDataFactory -> getClientData($mikrotik)['userIdent'] : 'NOT_SET');
             $deviceName = "07NAV" . $clientIdent;
             $devicePass = generateRandPassword();
-            $firstName = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['firstName']) ? $this -> mikrotikDataFactory -> getClientData($mikrotik)['firstName'] : 'NOT_SET');
-            $lastName = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['lastName']) ? $this -> mikrotikDataFactory -> getClientData($mikrotik)['lastName'] : 'NOT_SET');
-            $fullName = $lastName . ' ' . $firstName;
-            $street1 = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['street1']) ? $this -> mikrotikDataFactory -> getServiceData($mikrotik)['street1'] : 'NOT_SET');
-            $street2 = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['street2']) ? $this -> mikrotikDataFactory -> getServiceData($mikrotik)['street2'] : 'NOT_SET');
-            $fullAddress = $street1 . ' ' . $street2;
+
+            $fullName = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['lastName']) ? 
+                                $this -> mikrotikDataFactory -> getClientData($mikrotik)['lastName'] : null) . ' ' .
+                            (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['firstName']) ?
+                                $this -> mikrotikDataFactory -> getClientData($mikrotik)['firstName'] : null);
+
+            $fullAddress = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['street1']) ?
+                                $this -> mikrotikDataFactory -> getServiceData($mikrotik)['street1'] : null) . ' ' .
+                            (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['street2']) ?
+                                $this -> mikrotikDataFactory -> getServiceData($mikrotik)['street2'] : null);
+
             $clientSiteId = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['unmsClientSiteId']) ? $this -> mikrotikDataFactory -> getServiceData($mikrotik)['unmsClientSiteId'] : 'NOT_SET');
+            $serviceId = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['id']) ? $this -> mikrotikDataFactory -> getServiceData($mikrotik)['id'] : null);
 
-            if($mikrotik -> changeType === 'insert' || $mikrotik -> changeType === 'unsuspend') {
-                if($this -> mikrotikDataFactory -> getServiceData($mikrotik)['servicePlanType'] === 'Internet') {                    
-                    $internetPlan = curl_init();
+            switch($mikrotik -> changeType) {
+                case "insert":
+                    switch($this -> mikrotikDataFactory -> getServiceData($mikrotik)['servicePlanType']) {
+                        case "Internet":
+                            $internetPlan = UcrmApi::doRequest('devices/blackboxes/config', 'POST',
+                            "{
+                                \"deviceId\": \"$deviceId\",
+                                \"hostname\": \"$deviceName\",
+                                \"modelName\": \"Router\",
+                                \"macAddress\": \"00:00:0a:00:00:aa\",
+                                \"deviceRole\": \"router\",
+                                \"siteId\": \"$clientSiteId\",
+                                \"pingEnabled\": true,
+                                \"ipAddress\": \"$IPs[$ipAddress]\",
+                                \"ubntDevice\": false,
+                                \"note\": \"$fullAddress\",
+                                \"interfaces\": [
+                                    {
+                                        \"id\": \"$deviceName\",
+                                        \"position\": 0,
+                                        \"name\": \"$deviceName\",
+                                        \"mac\": \"00:00:0a:00:00:aa\",
+                                        \"type\": \"eth\",
+                                        \"addresses\": [
+                                            \"$IPs[$ipAddress]/32\"
+                                        ]
+                                    }
+                                ]
+                            }");
 
-                    curl_setopt($internetPlan, CURLOPT_URL, "https://uisp.07internet.ro/nms/api/v2.1/devices/blackboxes/config");
-                    curl_setopt($internetPlan, CURLOPT_RETURNTRANSFER, TRUE);
-                    curl_setopt($internetPlan, CURLOPT_HEADER, FALSE);
+                            if($internetPlan) {
+                                $mktApi = new RouterosAPI;
+                                $mktApi -> debug = true;
 
-                    curl_setopt($internetPlan, CURLOPT_POST, TRUE);
+                                if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
 
-                    curl_setopt($internetPlan, CURLOPT_POSTFIELDS, "
-                        {
-                            \"deviceId\": \"$deviceId\",
-                            \"hostname\": \"$deviceName\",
-                            \"modelName\": \"Router\",
-                            \"macAddress\": \"00:00:0a:00:00:aa\",
-                            \"deviceRole\": \"router\",
-                            \"siteId\": \"$clientSiteId\",
-                            \"pingEnabled\": true,
-                            \"ipAddress\": \"$IPs[$ipAddress]\",
-                            \"ubntDevice\": false,
-                            \"note\": \"$fullAddress\",
-                            \"interfaces\": [
-                                {
-                                    \"id\": \"$deviceName\",
-                                    \"position\": 0,
-                                    \"name\": \"$deviceName\",
-                                    \"mac\": \"00:00:0a:00:00:aa\",
-                                    \"type\": \"eth\",
-                                    \"addresses\": [
-                                        \"$IPs[$ipAddress]/32\"
-                                    ]
+                                    $i = 0;
+                                    $deviceUser = $deviceUserOriginal = "07NAV" . $clientIdent;
+                                    do {
+                                        // First - check if a duplicate exists...
+                                        $sameNames = $mktApi -> comm("/ppp/secret/getall", array(
+                                            ".proplist" => ".id",
+                                            "?name" => $deviceUser
+                                        ));
+
+                                        // Second - update and prepare for rechecking...
+                                        if($sameNames) {
+                                            $i ++;
+                                            $deviceUser = $deviceUserOriginal . "-". $i ."";
+                                        }
+
+                                        // Finally, below, if check failed, cycle and check again with the new updated name...
+                                    }
+                                    while($sameNames);
+
+                                    // Finally, tidy up...
+                                    // If you need the original value of "Device User" you can retain it.
+                                    unset($i, $deviceUserOriginal);
+
+                                    $mktApi -> comm("/ppp/secret/add", array(
+                                        "name" => $deviceUser,
+                                        "remote-address" => $IPs[$ipAddress],
+                                        "password" => $devicePass,
+                                        "service" => "pppoe",
+                                        "comment" => $fullName . ' / ' . $fullAddress
+                                    ));
+
+                                    $mktApi -> disconnect();
+
+                                    /** UPDATE Custom Attribute for: Service IP, Service PPPoE Username, Password and Service Address */
+                                    $updateServiceIP = curl_init();
+
+                                    curl_setopt($updateServiceIP, CURLOPT_URL, 'https://uisp.07internet.ro/crm/api/v1.0/clients/services/' . $serviceId);
+                                    curl_setopt($updateServiceIP, CURLOPT_RETURNTRANSFER, TRUE);
+                                    curl_setopt($updateServiceIP, CURLOPT_HEADER, FALSE);
+
+                                    curl_setopt($updateServiceIP, CURLOPT_CUSTOMREQUEST, "PATCH");
+
+                                    curl_setopt($updateServiceIP, CURLOPT_POSTFIELDS, "{
+                                        \"attributes\": [
+                                            {
+                                                \"value\": \"$IPs[$ipAddress]\",
+                                                \"customAttributeId\": 45
+                                            }
+                                        ]
+                                    }");
+
+                                    curl_setopt($updateServiceIP, CURLOPT_HTTPHEADER, array(
+                                        "Content-Type: application/json",
+                                        "X-Auth-App-Key: HS9hdWcdsV34MXGy/VKKloywDwZeVORNGAfZlHQNQM2sAQM03bSPOodm/9eQ1qpH"
+                                    ));
+
+                                    $responseServiceIP = curl_exec($updateServiceIP);
+                                    curl_close($updateServiceIP);
+
+                                    //var_dump($responseServiceIP);
+                                    $updateServiceUser = curl_init();
+
+                                    curl_setopt($updateServiceUser, CURLOPT_URL, 'https://uisp.07internet.ro/crm/api/v1.0/clients/services/' . $serviceId);
+                                    curl_setopt($updateServiceUser, CURLOPT_RETURNTRANSFER, TRUE);
+                                    curl_setopt($updateServiceUser, CURLOPT_HEADER, FALSE);
+
+                                    curl_setopt($updateServiceUser, CURLOPT_CUSTOMREQUEST, "PATCH");
+
+                                    curl_setopt($updateServiceUser, CURLOPT_POSTFIELDS, "{
+                                        \"attributes\": [
+                                            {
+                                                \"value\": \"$deviceUser\",
+                                                \"customAttributeId\": 46
+                                            }
+                                        ]
+                                    }");
+
+                                    curl_setopt($updateServiceUser, CURLOPT_HTTPHEADER, array(
+                                        "Content-Type: application/json",
+                                        "X-Auth-App-Key: HS9hdWcdsV34MXGy/VKKloywDwZeVORNGAfZlHQNQM2sAQM03bSPOodm/9eQ1qpH"
+                                    ));
+
+                                    $responseServiceUser = curl_exec($updateServiceUser);
+                                    curl_close($updateServiceUser);
+
+                                    //var_dump($responseServiceUser);
+
+                                    $updateServicePass = curl_init();
+
+                                    curl_setopt($updateServicePass, CURLOPT_URL, 'https://uisp.07internet.ro/crm/api/v1.0/clients/services/' . $serviceId);
+                                    curl_setopt($updateServicePass, CURLOPT_RETURNTRANSFER, TRUE);
+                                    curl_setopt($updateServicePass, CURLOPT_HEADER, FALSE);
+
+                                    curl_setopt($updateServicePass, CURLOPT_CUSTOMREQUEST, "PATCH");
+
+                                    curl_setopt($updateServicePass, CURLOPT_POSTFIELDS, "{
+                                        \"attributes\": [
+                                            {
+                                                \"value\": \"$devicePass\",
+                                                \"customAttributeId\": 47
+                                            }
+                                        ]
+                                    }");
+
+                                    curl_setopt($updateServicePass, CURLOPT_HTTPHEADER, array(
+                                        "Content-Type: application/json",
+                                        "X-Auth-App-Key: HS9hdWcdsV34MXGy/VKKloywDwZeVORNGAfZlHQNQM2sAQM03bSPOodm/9eQ1qpH"
+                                    ));
+
+                                    $responseServicePass = curl_exec($updateServicePass);
+                                    curl_close($updateServicePass);
+
+                                    //var_dump($responseServicePass);
+                                    $updateServiceAddr = curl_init();
+
+                                    curl_setopt($updateServiceAddr, CURLOPT_URL, 'https://uisp.07internet.ro/crm/api/v1.0/clients/services/' . $serviceId);
+                                    curl_setopt($updateServiceAddr, CURLOPT_RETURNTRANSFER, TRUE);
+                                    curl_setopt($updateServiceAddr, CURLOPT_HEADER, FALSE);
+
+                                    curl_setopt($updateServiceAddr, CURLOPT_CUSTOMREQUEST, "PATCH");
+
+                                    curl_setopt($updateServiceAddr, CURLOPT_POSTFIELDS, "{
+                                        \"attributes\": [
+                                            {
+                                                \"value\": \"$fullAddress\",
+                                                \"customAttributeId\": 48
+                                            }
+                                        ]
+                                    }");
+
+                                    curl_setopt($updateServiceAddr, CURLOPT_HTTPHEADER, array(
+                                        "Content-Type: application/json",
+                                        "X-Auth-App-Key: HS9hdWcdsV34MXGy/VKKloywDwZeVORNGAfZlHQNQM2sAQM03bSPOodm/9eQ1qpH"
+                                    ));
+
+                                    $responseServiceAddr = curl_exec($updateServiceAddr);
+                                    curl_close($updateServiceAddr);
+
+                                    //var_dump($responseServiceAddr);
                                 }
-                            ]
-                        }
-                    ");
-
-                    curl_setopt($internetPlan, CURLOPT_HTTPHEADER, array(
-                    "Accept: application/json",
-                    "x-auth-token: 415711e5-29f7-4a20-9ca2-cf7451ef214f",
-                    "Content-Type: application/json"
-                    ));
-
-                    $internetPlanResponse = curl_exec($internetPlan);
-                    curl_close($internetPlan);
-
-                    if($internetPlanResponse) {
-
-                        $mktApi = new RouterosAPI;
-                        $mktApi -> debug = true;
-
-                        if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
-
-                            $i = 0;
-                            $deviceUser = $deviceUserOriginal = "07NAV" . $clientIdent;
-                            do {
-                                // First - check if a duplicate exists...
-                                $sameNames = $mktApi -> comm("/ppp/secret/getall", array(
-                                    ".proplist" => ".id",
-                                    "?name" => $deviceUser
-                                ));
-
-                                // Second - update and prepare for rechecking...
-                                if($sameNames) {
-                                    $i ++;
-                                    $deviceUser = $deviceUserOriginal . " (". $i .")";
-                                }
-
-                                // Finally, below, if check failed, cycle and check again with the new updated name...
                             }
-                            while($sameNames);
+                            break;
 
-                            // Finally, tidy up...
-                            // If you need the original value of "Device User" you can retain it.
-                            unset($i, $deviceUserOriginal);
+                        case "General":
+                            $mktApi = new RouterosAPI;
+                            $mktApi -> debug = true;
 
-                            $mktApi -> comm("/ppp/secret/add", array(
-                                "name" => $deviceUser,
-                                "remote-address" => $IPs[$ipAddress],
-                                "password" => $devicePass,
-                                "service" => "pppoe",
-                                "comment" => $fullName . ' / ' . $fullAddress
-                            ));
+                            if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
+
+                                $i = 0;
+                                $deviceUser = $deviceUserOriginal = "07NAV" . $clientIdent;
+                                do {
+                                    // First - check if a duplicate exists...
+                                    $sameNames = $mktApi -> comm("/ppp/secret/getall", array(
+                                        ".proplist" => ".id",
+                                        "?name" => $deviceUser
+                                    ));
+
+                                    // Second - update and prepare for rechecking...
+                                    if($sameNames) {
+                                        $i ++;
+                                        $deviceUser = $deviceUserOriginal . "-". $i ."";
+                                    }
+
+                                    // Finally, below, if check failed, cycle and check again with the new updated name...
+                                }
+                                while($sameNames);
+
+                                // Finally, tidy up...
+                                // If you need the original value of "Device User" you can retain it.
+                                unset($i, $deviceUserOriginal);
+
+                                $mktApi -> comm("/ppp/secret/add", array(
+                                    "name" => $deviceUser,
+                                    "remote-address" => "1.1.1.1",
+                                    "password" => $devicePass,
+                                    "service" => "pppoe",
+                                    "comment" => $fullName . ' / ' . $fullAddress
+                                ));
+                            }
 
                             $mktApi -> disconnect();
+
+                            /** UPDATE Custom Attribute for: Service IP, Service PPPoE Username, Password and Service Address */
+                            $updateServiceIP = curl_init();
+
+                            curl_setopt($updateServiceIP, CURLOPT_URL, 'https://uisp.07internet.ro/crm/api/v1.0/clients/services/' . $serviceId);
+                            curl_setopt($updateServiceIP, CURLOPT_RETURNTRANSFER, TRUE);
+                            curl_setopt($updateServiceIP, CURLOPT_HEADER, FALSE);
+
+                            curl_setopt($updateServiceIP, CURLOPT_CUSTOMREQUEST, "PATCH");
+
+                            curl_setopt($updateServiceIP, CURLOPT_POSTFIELDS, "{
+                                \"attributes\": [
+                                    {
+                                        \"value\": \"1.1.1.1\",
+                                        \"customAttributeId\": 45
+                                    }
+                                ]
+                            }");
+
+                            curl_setopt($updateServiceIP, CURLOPT_HTTPHEADER, array(
+                                "Content-Type: application/json",
+                                "X-Auth-App-Key: HS9hdWcdsV34MXGy/VKKloywDwZeVORNGAfZlHQNQM2sAQM03bSPOodm/9eQ1qpH"
+                            ));
+
+                            $responseServiceIP = curl_exec($updateServiceIP);
+                            curl_close($updateServiceIP);
+
+                            //var_dump($responseServiceIP);
+                            $updateServiceUser = curl_init();
+
+                            curl_setopt($updateServiceUser, CURLOPT_URL, 'https://uisp.07internet.ro/crm/api/v1.0/clients/services/' . $serviceId);
+                            curl_setopt($updateServiceUser, CURLOPT_RETURNTRANSFER, TRUE);
+                            curl_setopt($updateServiceUser, CURLOPT_HEADER, FALSE);
+
+                            curl_setopt($updateServiceUser, CURLOPT_CUSTOMREQUEST, "PATCH");
+
+                            curl_setopt($updateServiceUser, CURLOPT_POSTFIELDS, "{
+                                \"attributes\": [
+                                    {
+                                        \"value\": \"$deviceUser\",
+                                        \"customAttributeId\": 46
+                                    }
+                                ]
+                            }");
+
+                            curl_setopt($updateServiceUser, CURLOPT_HTTPHEADER, array(
+                                "Content-Type: application/json",
+                                "X-Auth-App-Key: HS9hdWcdsV34MXGy/VKKloywDwZeVORNGAfZlHQNQM2sAQM03bSPOodm/9eQ1qpH"
+                            ));
+
+                            $responseServiceUser = curl_exec($updateServiceUser);
+                            curl_close($updateServiceUser);
+
+                            //var_dump($responseServiceUser);
+
+                            $updateServicePass = curl_init();
+
+                            curl_setopt($updateServicePass, CURLOPT_URL, 'https://uisp.07internet.ro/crm/api/v1.0/clients/services/' . $serviceId);
+                            curl_setopt($updateServicePass, CURLOPT_RETURNTRANSFER, TRUE);
+                            curl_setopt($updateServicePass, CURLOPT_HEADER, FALSE);
+
+                            curl_setopt($updateServicePass, CURLOPT_CUSTOMREQUEST, "PATCH");
+
+                            curl_setopt($updateServicePass, CURLOPT_POSTFIELDS, "{
+                                \"attributes\": [
+                                    {
+                                        \"value\": \"$devicePass\",
+                                        \"customAttributeId\": 47
+                                    }
+                                ]
+                            }");
+
+                            curl_setopt($updateServicePass, CURLOPT_HTTPHEADER, array(
+                                "Content-Type: application/json",
+                                "X-Auth-App-Key: HS9hdWcdsV34MXGy/VKKloywDwZeVORNGAfZlHQNQM2sAQM03bSPOodm/9eQ1qpH"
+                            ));
+
+                            $responseServicePass = curl_exec($updateServicePass);
+                            curl_close($updateServicePass);
+
+                            //var_dump($responseServicePass);
+                            $updateServiceAddr = curl_init();
+
+                            curl_setopt($updateServiceAddr, CURLOPT_URL, 'https://uisp.07internet.ro/crm/api/v1.0/clients/services/' . $serviceId);
+                            curl_setopt($updateServiceAddr, CURLOPT_RETURNTRANSFER, TRUE);
+                            curl_setopt($updateServiceAddr, CURLOPT_HEADER, FALSE);
+
+                            curl_setopt($updateServiceAddr, CURLOPT_CUSTOMREQUEST, "PATCH");
+
+                            curl_setopt($updateServiceAddr, CURLOPT_POSTFIELDS, "{
+                                \"attributes\": [
+                                    {
+                                        \"value\": \"$fullAddress\",
+                                        \"customAttributeId\": 48
+                                    }
+                                ]
+                            }");
+
+                            curl_setopt($updateServiceAddr, CURLOPT_HTTPHEADER, array(
+                                "Content-Type: application/json",
+                                "X-Auth-App-Key: HS9hdWcdsV34MXGy/VKKloywDwZeVORNGAfZlHQNQM2sAQM03bSPOodm/9eQ1qpH"
+                            ));
+
+                            $responseServiceAddr = curl_exec($updateServiceAddr);
+                            curl_close($updateServiceAddr);
+
+                            //var_dump($responseServiceAddr);
                         }
+                        break;
+                        
+                case "suspend":
+                    $mktApi = new RouterosAPI;
+                    $mktApi -> debug = true;
+    
+                    if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
+                        $allUsers = $mktApi -> comm("/ppp/secret/getall", array(
+                            ".proplist" => ".id",
+                            "?name" => $this -> mikrotikDataFactory -> getServiceData($mikrotik)['attributes'][1]['value']
+                        ));
+    
+                        $mktApi -> comm("/ppp/secret/set", array(
+                            ".id" => $allUsers[0][".id"],
+                            "remote-address" => "1.1.1.1",
+                        ));
+    
+                        $mktApi -> comm("/ppp/active/remove", array(
+                            ".id" => $allUsers[0][".id"]
+                        ));
                     }
+                    break;
 
-                    // Update Custom Attribute for device password.
-                    $customAttr = curl_init();
-
-                    curl_setopt($customAttr, CURLOPT_URL, 'https://uisp.07internet.ro/crm/api/v1.0/clients/' . $clientId);
-                    curl_setopt($customAttr, CURLOPT_RETURNTRANSFER, TRUE);
-                    curl_setopt($customAttr, CURLOPT_HEADER, FALSE);
-
-                    curl_setopt($customAttr, CURLOPT_CUSTOMREQUEST, 'PATCH');
-
-                    curl_setopt($customAttr, CURLOPT_POSTFIELDS, "{
-                        \"attributes\": [
-                            {
-                                \"value\": \"$devicePass\",
-                                \"customAttributeId\": 19
-                            }
-                        ]
-                    }");
-
-                    curl_setopt($customAttr, CURLOPT_HTTPHEADER, array(
-                        'Content-Type: application/json',
-                        'X-Auth-App-Key: HS9hdWcdsV34MXGy/VKKloywDwZeVORNGAfZlHQNQM2sAQM03bSPOodm/9eQ1qpH'
-                    ));
-
-                    $dump = curl_exec($customAttr);
-                    curl_close($customAttr);
-
-                    return;
-                } elseif($this -> mikrotikDataFactory -> getServiceData($mikrotik)['servicePlanType'] === 'General') {
+                case "unsuspend":
                     $mktApi = new RouterosAPI;
                     $mktApi -> debug = true;
 
                     if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
+                        $allUsers = $mktApi -> comm("/ppp/secret/getall", array(
+                            ".proplist" => ".id",
+                            "?name" => $this -> mikrotikDataFactory -> getServiceData($mikrotik)['attributes'][1]['value']
+                        ));
 
-                        $i = 0;
-                        $deviceUser = $deviceUserOriginal = "07NAV" . $clientIdent;
-                        do {
-                            // First - check if a duplicate exists...
-                            $sameNames = $mktApi -> comm("/ppp/secret/getall", array(
-                                ".proplist" => ".id",
-                                "?name" => $deviceUser
-                            ));
+                        $mktApi -> comm("/ppp/secret/set", array(
+                            ".id" => $allUsers[0][".id"],
+                            "remote-address" => $this -> mikrotikDataFactory -> getServiceData($mikrotik)['attributes'][0]['value']
+                        ));
 
-                            // Second - update and prepare for rechecking...
-                            if($sameNames) {
-                                $i ++;
-                                $deviceUser = $deviceUserOriginal . " (". $i .")";
-                            }
-
-                            // Finally, below, if check failed, cycle and check again with the new updated name...
-                        }
-                        while($sameNames);
-
-                        // Finally, tidy up...
-                        // If you need the original value of "Device User" you can retain it.
-                        unset($i, $deviceUserOriginal);
-
-                        $mktApi -> comm("/ppp/secret/add", array(
-                            "name" => $deviceUser,
-                            "remote-address" => "1.1.1.1",
-                            "password" => $devicePass,
-                            "service" => "pppoe",
-                            "comment" => $fullName . ' / ' . $fullAddress
+                        $mktApi -> comm("/ppp/active/remove", array(
+                            ".id" => $allUsers[0][".id"]
                         ));
                     }
+                    break;
 
-                    $mktApi -> disconnect();
-                    return;
-                }
+                case "edit":
+                    break;
+
+                case "end":
+                    $mktApi = new RouterosAPI;
+                    $mktApi -> debug = true;
+    
+                    if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
+                        $allUsers = $mktApi -> comm("/ppp/secret/getall", array(
+                            ".proplist" => ".id",
+                            "?name" => $this -> mikrotikDataFactory -> getServiceData($mikrotik)['attributes'][1]['value']
+                        ));
+    
+                        $mktApi -> comm("/ppp/active/remove", array(
+                            ".id" => $allUsers[0][".id"]
+                        ));
+    
+                        $mktApi -> comm("/ppp/secret/remove", array(
+                            ".id" => $allUsers[0][".id"]
+                        ));
+                    }
+                    break;
+
+                default:
+                    die("Unsupported.");
             }
 
-            /**
-             * SUSPEND - remove de la active si modifica remote-address la 1.1.1.1.
-             * END - remove din active si din secret.
-             * 
+            /** 
              * 1. Solutie pentru SMS Sending.
              * 2. Retrimitere mail-uri in functie de nume, DOB.
              */
-
-            if($mikrotik -> changeType === 'suspend') {
-                $mktApi = new RouterosAPI;
-                $mktApi -> debug = true;
-
-                if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
-                    $allUsers = $mktApi -> comm("/ppp/secret/getall", array(
-                        ".proplist" => ".id",
-                        "?comment" => $fullName . ' / ' . $fullAddress
-                    ));
-
-                    $mktApi -> comm("/ppp/secret/set", array(
-                        ".id" => $allUsers[0][".id"],
-                        "?remote-address" => "1.1.1.1",
-                    ));
-
-                    /*$mktApi -> comm("/ppp/active/remove", array(
-                        ".id" => $allUsers[0][".id"]
-                    ));*/
-                }
-                $mktApi -> disconnect();   
-                return;
-            }
-
-            if($mikrotik -> changeType === 'end') {
-                $mktApi = new RouterosAPI;
-                $mktApi -> debug = true;
-
-                if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
-                    $allUsers = $mktApi -> comm("/ppp/secret/getall", array(
-                        ".proplist" => ".id",
-                        "?comment" => $fullName . ' / ' . $fullAddress
-                    ));
-
-                    $mktApi -> comm("/ppp/active/remove", array(
-                        ".id" => $allUsers[0][".id"]
-                    ));
-
-                    $mktApi -> comm("/ppp/secret/remove", array(
-                        ".id" => $allUsers[0][".id"]
-                    ));
-                }
-                $mktApi -> disconnect();
-                return;
-            }
         } catch (\Exception $ex) {
             $this->logger->error($ex->getMessage());
             $this->logger->warning($ex->getTraceAsString());

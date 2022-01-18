@@ -19,5 +19,3 @@ such as: service address, customer name etc.
 ## TODO LIST
 
 - cand se apeleaza webhook-ul de editare al serviciului, trebuie sa se schimbe doar planul, nu sa se creeze un alt serviciu.
-
-- stergerea instantei PPP din Secrets sa se faca pe baza de nume pppoe + ip.
