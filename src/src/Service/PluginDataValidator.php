@@ -6,7 +6,7 @@ namespace MikrotikService\Service;
 
 class PluginDataValidator
 {
-     /**
+    /**
      * @var Logger
      */
     private $logger;

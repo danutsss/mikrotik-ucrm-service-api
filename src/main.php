@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 use MikrotikService\Service\TemplateRenderer;
 use Ubnt\UcrmPluginSdk\Service\UcrmOptionsManager;
@@ -29,19 +29,19 @@ $renderer = new TemplateRenderer();
 
 // Set the default template and data.
 $template = "seeips.php";
-$data = [   'ucrmPublicUrl' => $optionsManager -> loadOptions() -> ucrmPublicUrl    ];
+$data = ['ucrmPublicUrl' => $optionsManager->loadOptions()->ucrmPublicUrl];
 
-if(isset($_GET["hook"])) {
+if (isset($_GET["hook"])) {
     // Handle the possible "hooK" parameters...
-    switch($_GET["hook"]) {
+    switch ($_GET["hook"]) {
         case "seeips":
             $template = "seeips.php";
             break;
-            
+
         default:
             // Maybe die here or use above default?!
             die("Unsupported 'hook' parameter.");
     }
 }
 
-$renderer -> render(__DIR__ . "/views/$template", $data);
+$renderer->render(__DIR__ . "/views/$template", $data);

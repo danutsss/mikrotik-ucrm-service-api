@@ -40,7 +40,7 @@ class UcrmApi
         $urlData = parse_url(
             $this->getApiUrl($this->optionsManager->load())
         );
-        $this->verifyUcrmApiConnection = ! ($urlData
+        $this->verifyUcrmApiConnection = !($urlData
             && strtolower($urlData['host']) === 'localhost'
             && strtolower($urlData['scheme']) === 'https'
         );
@@ -120,7 +120,7 @@ class UcrmApi
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         }
 
-        if (! empty($post)) {
+        if (!empty($post)) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post));
         }
 
@@ -140,7 +140,8 @@ class UcrmApi
         return $response !== false ? json_decode($response, true) : null;
     }
 
-    public static function ucrmRequest($url, $method = 'GET', $post = []) {
+    public static function ucrmRequest($url, $method = 'GET', $post = [])
+    {
         $method = strtoupper($method);
 
         $ch = curl_init();
@@ -164,17 +165,17 @@ class UcrmApi
             ]
         );
 
-        if($method !== 'GET') {
+        if ($method !== 'GET') {
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         }
 
         $response = curl_exec($ch);
 
-        if(curl_errno($ch) !== 0) {
+        if (curl_errno($ch) !== 0) {
             echo sprintf('Eroare cURL: %s', curl_error($ch)) . PHP_EOL;
         }
 
-        if(curl_getinfo($ch, CURLINFO_HTTP_CODE) >= 400) {
+        if (curl_getinfo($ch, CURLINFO_HTTP_CODE) >= 400) {
             echo sprintf('Eroare API: %s', $response) . PHP_EOL;
             $response = false;
         }

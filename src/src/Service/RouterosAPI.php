@@ -1,4 +1,5 @@
 <?php
+
 /*****************************
  *
  * RouterOS PHP API class v1.6
@@ -35,11 +36,11 @@ class RouterosAPI
     public function isIterable($var)
     {
         return $var !== null
-                && (is_array($var)
+            && (is_array($var)
                 || $var instanceof Traversable
                 || $var instanceof Iterator
                 || $var instanceof IteratorAggregate
-                );
+            );
     }
 
     /**
@@ -98,7 +99,7 @@ class RouterosAPI
     {
         for ($ATTEMPT = 1; $ATTEMPT <= $this->attempts; $ATTEMPT++) {
             $this->connected = false;
-            $PROTOCOL = ($this->ssl ? 'ssl://' : '' );
+            $PROTOCOL = ($this->ssl ? 'ssl://' : '');
             $this->debug('Connection attempt #' . $ATTEMPT . ' to ' . $PROTOCOL . $ip . ':' . $this->port . '...');
             $this->socket = @fsockopen($PROTOCOL . $ip, $this->port, $this->error_no, $this->error_str, $this->timeout);
             if ($this->socket) {
@@ -143,7 +144,7 @@ class RouterosAPI
     public function disconnect()
     {
         // let's make sure this socket is still valid.  it may have been closed by something else
-        if( is_resource($this->socket) ) {
+        if (is_resource($this->socket)) {
             fclose($this->socket);
         }
         $this->connected = false;
@@ -165,11 +166,11 @@ class RouterosAPI
             $CURRENT     = null;
             $singlevalue = null;
             foreach ($response as $x) {
-                if (in_array($x, array('!fatal','!re','!trap'))) {
+                if (in_array($x, array('!fatal', '!re', '!trap'))) {
                     if ($x == '!re') {
-                        $CURRENT =& $PARSED[];
+                        $CURRENT = &$PARSED[];
                     } else {
-                        $CURRENT =& $PARSED[$x][];
+                        $CURRENT = &$PARSED[$x][];
                     }
                 } elseif ($x != '!done') {
                     $MATCHES = array();
@@ -207,11 +208,11 @@ class RouterosAPI
             $CURRENT     = null;
             $singlevalue = null;
             foreach ($response as $x) {
-                if (in_array($x, array('!fatal','!re','!trap'))) {
+                if (in_array($x, array('!fatal', '!re', '!trap'))) {
                     if ($x == '!re') {
-                        $CURRENT =& $PARSED[];
+                        $CURRENT = &$PARSED[];
                     } else {
-                        $CURRENT =& $PARSED[$x][];
+                        $CURRENT = &$PARSED[$x][];
                     }
                 } elseif ($x != '!done') {
                     $MATCHES = array();

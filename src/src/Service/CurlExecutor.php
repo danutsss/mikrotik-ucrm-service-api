@@ -91,7 +91,7 @@ class CurlExecutor
 
         curl_close($c);
 
-        if (! $result) {
+        if (!$result) {
             throw new CurlException("Error for request $url. Empty result.");
         }
 

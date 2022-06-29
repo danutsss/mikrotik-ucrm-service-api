@@ -34,14 +34,13 @@ class Plugin
      * @var MikrotikDataFactory
      */
     private $mikrotikDataFactory;
-    
+
     public function __construct(
         Logger $logger,
         OptionsManager $optionsManager,
         PluginDataValidator $pluginDataValidator,
         MikrotikDataFactory $mikrotikDataFactory
-    )
-    {
+    ) {
         $this->logger = $logger;
         $this->optionsManager = $optionsManager;
         $this->pluginDataValidator = $pluginDataValidator;
@@ -81,14 +80,14 @@ class Plugin
         }
 
         $userInput = file_get_contents('php://input');
-        if (! $userInput) {
+        if (!$userInput) {
             $this->logger->warning('no input');
 
             return;
         }
 
         $jsonData = @json_decode($userInput, true, 10);
-        if (! isset($jsonData['uuid'])) {
+        if (!isset($jsonData['uuid'])) {
             $this->logger->error('JSON error: ' . json_last_error_msg());
 
             return;
@@ -100,47 +99,45 @@ class Plugin
 
             return;
         }
-        
 
-        if (! $mikrotik->clientId) {
+
+        if (!$mikrotik->clientId) {
             $this->logger->warning('No client specified, cannot notify them.');
 
             return;
         }
 
         try {
-            /**
-             * UNMS API Token: 415711e5-29f7-4a20-9ca2-cf7451ef214f
-            */
-
-            $IPs = cidrToRange($pluginData -> ipAddresses);
+            $IPs = cidrToRange($pluginData->ipAddresses);
             $ipAddress = array_rand($IPs, 1);
 
             $deviceId = randomGUID();
-            $clientId = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['id']) ? $this -> mikrotikDataFactory -> getClientData($mikrotik)['id'] : 'NOT_SET');
-            $clientIdent = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['userIdent']) ? $this -> mikrotikDataFactory -> getClientData($mikrotik)['userIdent'] : 'NOT_SET');
+            $clientId = (isset($this->mikrotikDataFactory->getClientData($mikrotik)['id']) ? $this->mikrotikDataFactory->getClientData($mikrotik)['id'] : 'NOT_SET');
+            $clientIdent = (isset($this->mikrotikDataFactory->getClientData($mikrotik)['userIdent']) ? $this->mikrotikDataFactory->getClientData($mikrotik)['userIdent'] : 'NOT_SET');
             $deviceName = "07NAV" . $clientIdent;
             $devicePass = generateRandPassword();
 
-            $fullName = (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['lastName']) ? 
-                                $this -> mikrotikDataFactory -> getClientData($mikrotik)['lastName'] : null) . ' ' .
-                            (isset($this -> mikrotikDataFactory -> getClientData($mikrotik)['firstName']) ?
-                                $this -> mikrotikDataFactory -> getClientData($mikrotik)['firstName'] : null);
+            $fullName = (isset($this->mikrotikDataFactory->getClientData($mikrotik)['lastName']) ?
+                $this->mikrotikDataFactory->getClientData($mikrotik)['lastName'] : null) . ' ' .
+                (isset($this->mikrotikDataFactory->getClientData($mikrotik)['firstName']) ?
+                    $this->mikrotikDataFactory->getClientData($mikrotik)['firstName'] : null);
 
-            $fullAddress = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['street1']) ?
-                                $this -> mikrotikDataFactory -> getServiceData($mikrotik)['street1'] : null) . ' ' .
-                            (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['street2']) ?
-                                $this -> mikrotikDataFactory -> getServiceData($mikrotik)['street2'] : null);
+            $fullAddress = (isset($this->mikrotikDataFactory->getServiceData($mikrotik)['street1']) ?
+                $this->mikrotikDataFactory->getServiceData($mikrotik)['street1'] : null) . ' ' .
+                (isset($this->mikrotikDataFactory->getServiceData($mikrotik)['street2']) ?
+                    $this->mikrotikDataFactory->getServiceData($mikrotik)['street2'] : null);
 
-            $clientSiteId = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['unmsClientSiteId']) ? $this -> mikrotikDataFactory -> getServiceData($mikrotik)['unmsClientSiteId'] : 'NOT_SET');
-            $serviceId = (isset($this -> mikrotikDataFactory -> getServiceData($mikrotik)['id']) ? $this -> mikrotikDataFactory -> getServiceData($mikrotik)['id'] : null);
+            $clientSiteId = (isset($this->mikrotikDataFactory->getServiceData($mikrotik)['unmsClientSiteId']) ? $this->mikrotikDataFactory->getServiceData($mikrotik)['unmsClientSiteId'] : 'NOT_SET');
+            $serviceId = (isset($this->mikrotikDataFactory->getServiceData($mikrotik)['id']) ? $this->mikrotikDataFactory->getServiceData($mikrotik)['id'] : null);
 
-            switch($mikrotik -> changeType) {
+            switch ($mikrotik->changeType) {
                 case "insert":
-                    switch($this -> mikrotikDataFactory -> getServiceData($mikrotik)['servicePlanType']) {
+                    switch ($this->mikrotikDataFactory->getServiceData($mikrotik)['servicePlanType']) {
                         case "Internet":
-                            $internetPlan = UcrmApi::doRequest('devices/blackboxes/config', 'POST',
-                            "{
+                            $internetPlan = UcrmApi::doRequest(
+                                'devices/blackboxes/config',
+                                'POST',
+                                "{
                                 \"deviceId\": \"$deviceId\",
                                 \"hostname\": \"$deviceName\",
                                 \"modelName\": \"Router\",
@@ -163,38 +160,38 @@ class Plugin
                                         ]
                                     }
                                 ]
-                            }");
+                            }"
+                            );
 
-                            if($internetPlan) {
+                            if ($internetPlan) {
                                 $mktApi = new RouterosAPI;
-                                $mktApi -> debug = true;
+                                $mktApi->debug = true;
 
-                                if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
+                                if ($mktApi->connect("93.119.183.66", "admin", "stf@07internet")) {
 
                                     $i = 0;
                                     $deviceUser = $deviceUserOriginal = "07NAV" . $clientIdent;
                                     do {
                                         // First - check if a duplicate exists...
-                                        $sameNames = $mktApi -> comm("/ppp/secret/getall", array(
+                                        $sameNames = $mktApi->comm("/ppp/secret/getall", array(
                                             ".proplist" => ".id",
                                             "?name" => $deviceUser
                                         ));
 
                                         // Second - update and prepare for rechecking...
-                                        if($sameNames) {
-                                            $i ++;
-                                            $deviceUser = $deviceUserOriginal . "-". $i ."";
+                                        if ($sameNames) {
+                                            $i++;
+                                            $deviceUser = $deviceUserOriginal . "-" . $i . "";
                                         }
 
                                         // Finally, below, if check failed, cycle and check again with the new updated name...
-                                    }
-                                    while($sameNames);
+                                    } while ($sameNames);
 
                                     // Finally, tidy up...
                                     // If you need the original value of "Device User" you can retain it.
                                     unset($i, $deviceUserOriginal);
 
-                                    $mktApi -> comm("/ppp/secret/add", array(
+                                    $mktApi->comm("/ppp/secret/add", array(
                                         "name" => $deviceUser,
                                         "remote-address" => $IPs[$ipAddress],
                                         "password" => $devicePass,
@@ -202,7 +199,7 @@ class Plugin
                                         "comment" => $fullName . ' / ' . $fullAddress
                                     ));
 
-                                    $mktApi -> disconnect();
+                                    $mktApi->disconnect();
 
                                     /** UPDATE Custom Attribute for: Service IP, Service PPPoE Username, Password and Service Address */
                                     $updateServiceIP = curl_init();
@@ -316,34 +313,33 @@ class Plugin
 
                         case "General":
                             $mktApi = new RouterosAPI;
-                            $mktApi -> debug = true;
+                            $mktApi->debug = true;
 
-                            if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
+                            if ($mktApi->connect("93.119.183.66", "admin", "stf@07internet")) {
 
                                 $i = 0;
                                 $deviceUser = $deviceUserOriginal = "07NAV" . $clientIdent;
                                 do {
                                     // First - check if a duplicate exists...
-                                    $sameNames = $mktApi -> comm("/ppp/secret/getall", array(
+                                    $sameNames = $mktApi->comm("/ppp/secret/getall", array(
                                         ".proplist" => ".id",
                                         "?name" => $deviceUser
                                     ));
 
                                     // Second - update and prepare for rechecking...
-                                    if($sameNames) {
-                                        $i ++;
-                                        $deviceUser = $deviceUserOriginal . "-". $i ."";
+                                    if ($sameNames) {
+                                        $i++;
+                                        $deviceUser = $deviceUserOriginal . "-" . $i . "";
                                     }
 
                                     // Finally, below, if check failed, cycle and check again with the new updated name...
-                                }
-                                while($sameNames);
+                                } while ($sameNames);
 
                                 // Finally, tidy up...
                                 // If you need the original value of "Device User" you can retain it.
                                 unset($i, $deviceUserOriginal);
 
-                                $mktApi -> comm("/ppp/secret/add", array(
+                                $mktApi->comm("/ppp/secret/add", array(
                                     "name" => $deviceUser,
                                     "remote-address" => "1.1.1.1",
                                     "password" => $devicePass,
@@ -352,7 +348,7 @@ class Plugin
                                 ));
                             }
 
-                            $mktApi -> disconnect();
+                            $mktApi->disconnect();
 
                             /** UPDATE Custom Attribute for: Service IP, Service PPPoE Username, Password and Service Address */
                             $updateServiceIP = curl_init();
@@ -460,25 +456,25 @@ class Plugin
                             curl_close($updateServiceAddr);
 
                             //var_dump($responseServiceAddr);
-                        }
-                        break;
-                        
+                    }
+                    break;
+
                 case "suspend":
                     $mktApi = new RouterosAPI;
-                    $mktApi -> debug = true;
-    
-                    if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
-                        $allUsers = $mktApi -> comm("/ppp/secret/getall", array(
+                    $mktApi->debug = true;
+
+                    if ($mktApi->connect("93.119.183.66", "admin", "stf@07internet")) {
+                        $allUsers = $mktApi->comm("/ppp/secret/getall", array(
                             ".proplist" => ".id",
-                            "?name" => $this -> mikrotikDataFactory -> getServiceData($mikrotik)['attributes'][1]['value']
+                            "?name" => $this->mikrotikDataFactory->getServiceData($mikrotik)['attributes'][1]['value']
                         ));
-    
-                        $mktApi -> comm("/ppp/secret/set", array(
+
+                        $mktApi->comm("/ppp/secret/set", array(
                             ".id" => $allUsers[0][".id"],
                             "remote-address" => "1.1.1.1",
                         ));
-    
-                        $mktApi -> comm("/ppp/active/remove", array(
+
+                        $mktApi->comm("/ppp/active/remove", array(
                             ".id" => $allUsers[0][".id"]
                         ));
                     }
@@ -486,20 +482,20 @@ class Plugin
 
                 case "unsuspend":
                     $mktApi = new RouterosAPI;
-                    $mktApi -> debug = true;
+                    $mktApi->debug = true;
 
-                    if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
-                        $allUsers = $mktApi -> comm("/ppp/secret/getall", array(
+                    if ($mktApi->connect("93.119.183.66", "admin", "stf@07internet")) {
+                        $allUsers = $mktApi->comm("/ppp/secret/getall", array(
                             ".proplist" => ".id",
-                            "?name" => $this -> mikrotikDataFactory -> getServiceData($mikrotik)['attributes'][1]['value']
+                            "?name" => $this->mikrotikDataFactory->getServiceData($mikrotik)['attributes'][1]['value']
                         ));
 
-                        $mktApi -> comm("/ppp/secret/set", array(
+                        $mktApi->comm("/ppp/secret/set", array(
                             ".id" => $allUsers[0][".id"],
-                            "remote-address" => $this -> mikrotikDataFactory -> getServiceData($mikrotik)['attributes'][0]['value']
+                            "remote-address" => $this->mikrotikDataFactory->getServiceData($mikrotik)['attributes'][0]['value']
                         ));
 
-                        $mktApi -> comm("/ppp/active/remove", array(
+                        $mktApi->comm("/ppp/active/remove", array(
                             ".id" => $allUsers[0][".id"]
                         ));
                     }
@@ -510,19 +506,19 @@ class Plugin
 
                 case "end":
                     $mktApi = new RouterosAPI;
-                    $mktApi -> debug = true;
-    
-                    if($mktApi -> connect("93.119.183.66", "admin", "stf@07internet")) {
-                        $allUsers = $mktApi -> comm("/ppp/secret/getall", array(
+                    $mktApi->debug = true;
+
+                    if ($mktApi->connect("93.119.183.66", "admin", "stf@07internet")) {
+                        $allUsers = $mktApi->comm("/ppp/secret/getall", array(
                             ".proplist" => ".id",
-                            "?name" => $this -> mikrotikDataFactory -> getServiceData($mikrotik)['attributes'][1]['value']
+                            "?name" => $this->mikrotikDataFactory->getServiceData($mikrotik)['attributes'][1]['value']
                         ));
-    
-                        $mktApi -> comm("/ppp/active/remove", array(
+
+                        $mktApi->comm("/ppp/active/remove", array(
                             ".id" => $allUsers[0][".id"]
                         ));
-    
-                        $mktApi -> comm("/ppp/secret/remove", array(
+
+                        $mktApi->comm("/ppp/secret/remove", array(
                             ".id" => $allUsers[0][".id"]
                         ));
                     }

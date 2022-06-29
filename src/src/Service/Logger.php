@@ -11,14 +11,14 @@ class Logger extends \Katzgrau\KLogger\Logger
 {
     private const DEFAULT_LEVEL = LogLevel::INFO; // now configurable in manifest
     private const AVAILABLE_LEVELS = [
-     LogLevel::EMERGENCY,
-     LogLevel::ALERT,
-     LogLevel::CRITICAL,
-     LogLevel::ERROR,
-     LogLevel::WARNING,
-     LogLevel::NOTICE,
-     LogLevel::INFO,
-     LogLevel::DEBUG,
+        LogLevel::EMERGENCY,
+        LogLevel::ALERT,
+        LogLevel::CRITICAL,
+        LogLevel::ERROR,
+        LogLevel::WARNING,
+        LogLevel::NOTICE,
+        LogLevel::INFO,
+        LogLevel::DEBUG,
     ];
 
     public function __construct($level = null)
@@ -45,7 +45,7 @@ class Logger extends \Katzgrau\KLogger\Logger
     public function log($level, $message, array $context = array())
     {
         if (!is_string($message)) {
-            $message = var_export($message,true);
+            $message = var_export($message, true);
         }
         return parent::log($level, $message, $context);
     }

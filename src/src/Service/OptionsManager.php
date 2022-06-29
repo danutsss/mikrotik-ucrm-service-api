@@ -60,7 +60,7 @@ class OptionsManager
 
     private function getDataFromJson(string $filename): array
     {
-        if (! file_exists($filename)) {
+        if (!file_exists($filename)) {
             return [];
         }
 
